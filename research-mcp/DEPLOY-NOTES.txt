@@ -1,0 +1,25 @@
+Research MCP scaffold summary
+
+What this version does:
+- Runs as a real Python MCP server using FastMCP with streamable-http transport.
+- Exposes tools for SearXNG search, reranking, Crawl4AI markdown/html/JS/screenshot/pdf/crawl, Crawl4AI packaged context, and a raw crawl4ai_advanced passthrough.
+- Includes a high-level deep_research orchestration tool.
+- Keeps advanced capability by exposing crawl4ai_advanced instead of hiding Crawl4AI behind only a few opinionated tools.
+
+Important note:
+- This version uses Crawl4AI's HTTP server as the execution backend. That means it exposes the full HTTP surface plus advanced pass-through, but it does not yet call Crawl4AI's direct Python-only APIs like AsyncUrlSeeder or AdaptiveCrawler as first-class tools.
+- If you want those as first-class MCP tools too, the next iteration should either import crawl4ai directly in this service or add dedicated endpoints in your Crawl4AI service.
+
+Files to copy into your VPS stack:
+- research-mcp/Dockerfile
+- research-mcp/requirements.txt
+- research-mcp/app/main.py
+- merge docker-compose.research-mcp.yml into your compose
+- merge librechat.mcp.yaml into your librechat.yaml if/when you want LibreChat to consume the MCP directly
+
+Suggested deploy order:
+1. Add research-mcp service to docker-compose.yml
+2. docker compose build research-mcp
+3. docker compose up -d research-mcp
+4. verify from inside Docker that research-mcp can call searxng/crawl4ai/reranker
+5. then add the LibreChat MCP config and recreate LibreChat
