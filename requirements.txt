@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+httpx
+pydantic
+qdrant-client
+sentence-transformers
+python-dotenv
+mcp-server-sse
