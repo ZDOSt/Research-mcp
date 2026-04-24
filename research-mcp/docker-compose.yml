@@ -1,0 +1,20 @@
+  research-mcp:
+    build:
+      context: ./research-mcp
+      dockerfile: Dockerfile
+    container_name: research-mcp
+    ports:
+      - "8010:8000"
+    environment:
+      - SEARXNG_URL=http://searxng:8080
+      - CRAWL4AI_URL=http://crawl4ai:11235
+      - RERANKER_URL=http://reranker:8000
+      - QDRANT_URL=http://qdrant:6333
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on:
+      - searxng
+      - crawl4ai
+      - reranker
+      - qdrant
