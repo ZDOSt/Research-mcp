@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+httpx
+qdrant-client
+python-dotenv
+pydantic
+fastembed
+fastmcp
+playwright
