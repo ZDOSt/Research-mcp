@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Awaitable, Optional
 
 from fastmcp import FastMCP
@@ -250,13 +251,26 @@ async def ingest_text(
 
 
 if __name__ == "__main__":
-    mcp.run(
-        transport="http",
-        host="0.0.0.0",
-        port=8001,
-        path="/mcp",
-        uvicorn_config={
+    transport = os.getenv("MCP_TRANSPORT", "sse").strip().lower()
+    host = os.getenv("MCP_HOST", "0.0.0.0")
+    port = int(os.getenv("MCP_PORT", "8001"))
+    path = os.getenv("MCP_PATH", "").strip()
+
+    run_kwargs = {
+        "transport": transport,
+        "host": host,
+        "port": port,
+        "uvicorn_config": {
             "timeout_keep_alive": 300,
             "timeout_graceful_shutdown": 300,
         },
+    }
+
+    if transport in {"http", "streamable-http"}:
+        run_kwargs["path"] = path or "/mcp"
+    elif path:
+        run_kwargs["path"] = path
+
+    mcp.run(
+        **run_kwargs,
     )
