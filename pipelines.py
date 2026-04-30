@@ -37,6 +37,7 @@ URL_TABLE_ROW_LIMIT = 300
 URL_TABLE_ROW_CHAR_LIMIT = 900
 URL_NETWORK_EVIDENCE_LIMIT = 4
 URL_NETWORK_PREVIEW_LIMIT = 500
+MAX_CONCURRENT_CRAWL_INGEST = 2
 PRODUCT_URL_RE = re.compile(
     r"/(?:product|products|part|parts|catalog|p)/[^/?#]+",
     re.I,
@@ -490,6 +491,20 @@ async def crawl_and_ingest(result: dict, query: str, use_browser_fallback: bool 
     }
 
 
+async def crawl_and_ingest_limited(
+    semaphore: asyncio.Semaphore,
+    result: dict,
+    query: str,
+    use_browser_fallback: bool = False,
+) -> dict:
+    async with semaphore:
+        return await crawl_and_ingest(
+            result=result,
+            query=query,
+            use_browser_fallback=use_browser_fallback,
+        )
+
+
 def build_evidence_pack(results: List[dict]) -> List[dict]:
     evidence = []
 
@@ -569,7 +584,16 @@ async def research_pipeline(
 
     if selected:
         use_browser_fallback = mode in {"deep", "technical", "academic"} or verify
-        tasks = [crawl_and_ingest(result, query=query, use_browser_fallback=use_browser_fallback) for result in selected]
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_CRAWL_INGEST)
+        tasks = [
+            crawl_and_ingest_limited(
+                semaphore,
+                result,
+                query=query,
+                use_browser_fallback=use_browser_fallback,
+            )
+            for result in selected
+        ]
         crawl_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result, original in zip(crawl_results, selected):

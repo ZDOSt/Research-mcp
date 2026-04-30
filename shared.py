@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import time
+import asyncio
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
@@ -253,6 +254,10 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     return [list(vec) for vec in embedder.embed(texts)]
 
 
+async def embed_texts_async(texts: List[str]) -> List[List[float]]:
+    return await asyncio.to_thread(embed_texts, texts)
+
+
 def point_id_for(source: str, chunk_index: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{source}:{chunk_index}"))
 
@@ -273,6 +278,14 @@ def qdrant_query_points(query_vec: List[float], limit: int):
         query_vector=query_vec,
         limit=limit,
     )
+
+
+async def qdrant_query_points_async(query_vec: List[float], limit: int):
+    return await asyncio.to_thread(qdrant_query_points, query_vec, limit)
+
+
+async def qdrant_upsert_async(points: List[PointStruct]) -> None:
+    await asyncio.to_thread(qdrant.upsert, collection_name=COLLECTION_NAME, points=points)
 
 
 async def rerank_docs(query: str, docs: List[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
@@ -361,7 +374,7 @@ async def rag_ingest_impl(req: IngestRequest) -> Dict[str, Any]:
         if not chunks:
             return {"stored": 0, "source": source}
 
-        vectors = embed_texts([chunk["text"] for chunk in chunks])
+        vectors = await embed_texts_async([chunk["text"] for chunk in chunks])
 
         points = []
 
@@ -402,7 +415,7 @@ async def rag_ingest_impl(req: IngestRequest) -> Dict[str, Any]:
                 )
             )
 
-        qdrant.upsert(collection_name=COLLECTION_NAME, points=points)
+        await qdrant_upsert_async(points)
         logger.info("Ingested %d chunks from %s.", len(points), source)
 
         return {
@@ -422,9 +435,9 @@ async def rag_ingest_impl(req: IngestRequest) -> Dict[str, Any]:
 async def rag_query_impl(req: QueryRequest) -> Dict[str, Any]:
     try:
         top_k = max(1, min(req.top_k, 30))
-        query_vec = embed_texts([req.query])[0]
+        query_vec = (await embed_texts_async([req.query]))[0]
 
-        hits = qdrant_query_points(query_vec=query_vec, limit=top_k * 5)
+        hits = await qdrant_query_points_async(query_vec=query_vec, limit=top_k * 5)
 
         unique_docs = []
         seen_text = set()
