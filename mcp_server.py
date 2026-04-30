@@ -1,4 +1,5 @@
-from typing import Optional
+import asyncio
+from typing import Awaitable, Optional
 
 from fastmcp import FastMCP
 
@@ -38,6 +39,22 @@ mcp = FastMCP(
 init_qdrant()
 
 
+async def run_resilient(coro: Awaitable[dict], tool_name: str) -> dict:
+    try:
+        return await coro
+    except asyncio.CancelledError:
+        context = runtime_retrieval_context()
+        return {
+            "error": "client_disconnected",
+            "tool": tool_name,
+            "retrieval_context": context,
+            "answering_instructions": [
+                "The MCP client disconnected before the tool response could be delivered.",
+                "Retry the request; the server stayed alive and did not intentionally reduce research depth.",
+            ],
+        }
+
+
 @mcp.tool
 async def research_web(
     query: str,
@@ -54,11 +71,14 @@ async def research_web(
 
     Modes: quick, balanced, deep, technical, academic, local_only, web_only.
     """
-    return await research_pipeline(
-        query=query,
-        mode=mode,
-        max_sources=max_sources,
-        verify=verify,
+    return await run_resilient(
+        research_pipeline(
+            query=query,
+            mode=mode,
+            max_sources=max_sources,
+            verify=verify,
+        ),
+        "research_web",
     )
 
 
@@ -91,13 +111,19 @@ async def investigate_url(
     Modes: auto, targeted, balanced, exhaustive.
     """
     max_chars = clamp_int(max_chars, 10000, 750000)
-    result = await explore_url_pipeline(
-        url=url,
-        task=task,
-        labels=labels,
-        mode=mode,
-        max_chars=max_chars,
+    result = await run_resilient(
+        explore_url_pipeline(
+            url=url,
+            task=task,
+            labels=labels,
+            mode=mode,
+            max_chars=max_chars,
+        ),
+        "investigate_url",
     )
+
+    if result.get("error") == "client_disconnected":
+        return result
 
     content = result.get("full_text_preview", "")
 
@@ -224,4 +250,12 @@ async def ingest_text(
 
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8001)
+    mcp.run(
+        transport="sse",
+        host="0.0.0.0",
+        port=8001,
+        uvicorn_config={
+            "timeout_keep_alive": 300,
+            "timeout_graceful_shutdown": 300,
+        },
+    )
