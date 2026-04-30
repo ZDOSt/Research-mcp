@@ -251,9 +251,10 @@ async def ingest_text(
 
 if __name__ == "__main__":
     mcp.run(
-        transport="sse",
+        transport="http",
         host="0.0.0.0",
         port=8001,
+        path="/mcp",
         uvicorn_config={
             "timeout_keep_alive": 300,
             "timeout_graceful_shutdown": 300,
