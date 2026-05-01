@@ -27,6 +27,8 @@ SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080")
 CRAWL4AI_URL = os.getenv("CRAWL4AI_URL", "http://crawl4ai:11235")
 RERANKER_URL = os.getenv("RERANKER_URL", "http://reranker:8000")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
+RESEARCH_API_URL = os.getenv("RESEARCH_API_URL", "")
+USE_RESEARCH_API_RAG = os.getenv("USE_RESEARCH_API_RAG", "false").lower() in {"1", "true", "yes", "on"}
 
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "librechat_docs")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
@@ -350,6 +352,15 @@ async def rerank_docs(query: str, docs: List[Dict[str, Any]], top_k: int) -> Lis
 
 
 async def rag_ingest_impl(req: IngestRequest) -> Dict[str, Any]:
+    if USE_RESEARCH_API_RAG and RESEARCH_API_URL:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.post(
+                f"{RESEARCH_API_URL.rstrip('/')}/rag/ingest",
+                json=req.model_dump(),
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     try:
         text = clean_text(req.text)
         if not text:
@@ -433,6 +444,15 @@ async def rag_ingest_impl(req: IngestRequest) -> Dict[str, Any]:
 
 
 async def rag_query_impl(req: QueryRequest) -> Dict[str, Any]:
+    if USE_RESEARCH_API_RAG and RESEARCH_API_URL:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.post(
+                f"{RESEARCH_API_URL.rstrip('/')}/rag/query",
+                json=req.model_dump(),
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     try:
         top_k = max(1, min(req.top_k, 30))
         query_vec = (await embed_texts_async([req.query]))[0]
